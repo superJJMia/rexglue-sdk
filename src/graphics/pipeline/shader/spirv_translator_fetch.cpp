@@ -19,6 +19,7 @@
 #include <fmt/format.h>
 
 #include <rex/assert.h>
+#include <rex/graphics/flags.h>
 #include <rex/graphics/pipeline/shader/spirv_translator.h>
 #include <rex/math.h>
 
@@ -2066,6 +2067,23 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
     rex::bit_scan_forward(used_result_components, &result_component_index);
     result_vector = result[result_component_index];
   }
+
+  // Diagnostic probe: force the texture fetch result to flat gray. If striped
+  // artifacts disappear, the color is coming from texture sampling.
+  if (REXCVAR_GET(ps_texture_probe) && is_pixel_shader()) {
+    spv::Id probe_gray = builder_->makeFloatConstant(0.5f);
+    if (used_result_component_count > 1) {
+      id_vector_temp_.clear();
+      for (uint32_t i = 0; i < used_result_component_count; ++i) {
+        id_vector_temp_.push_back(probe_gray);
+      }
+      result_vector = builder_->createCompositeConstruct(
+          type_float_vectors_[used_result_component_count - 1], id_vector_temp_);
+    } else {
+      result_vector = probe_gray;
+    }
+  }
+
   StoreResult(instr.result, result_vector);
 }
 
