@@ -126,6 +126,12 @@ struct FormatInfo {
   uint32_t block_width;
   uint32_t block_height;
   uint32_t bits_per_pixel;
+  // Width, in bits, of each of the 4 components stored in the guest format.
+  // Zero for components that do not exist / cannot be fetched as integers.
+  uint8_t component_bits[4];
+  // Whether the format stores fixed-point data in memory (integer num_format
+  // fetches of these need the normalized host value scaled back by the shader).
+  bool fixed;
 
   uint32_t bytes_per_block() const { return block_width * block_height * bits_per_pixel / 8; }
 

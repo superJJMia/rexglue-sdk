@@ -2029,6 +2029,7 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
           }
         }
 
+
         // Apply the exponent bias from the bits 13:18 of the fetch constant
         // word 4.
         spv::Id result_exponent_bias = builder_->createBinBuiltinCall(

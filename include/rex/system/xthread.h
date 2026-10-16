@@ -327,6 +327,10 @@ class XThread : public XObject {
   const CreationParams* creation_params() const { return &creation_params_; }
   uint32_t tls_ptr() const { return tls_static_address_; }
   uint32_t pcr_ptr() const { return pcr_address_; }
+  uint32_t stack_base() const { return stack_base_; }
+  uint32_t stack_limit() const { return stack_limit_; }
+  uint32_t stack_alloc_base() const { return stack_alloc_base_; }
+  uint32_t stack_alloc_size() const { return stack_alloc_size_; }
   // True if the thread is created by the guest app.
   bool is_guest_thread() const { return guest_thread_; }
   bool main_thread() const { return main_thread_; }

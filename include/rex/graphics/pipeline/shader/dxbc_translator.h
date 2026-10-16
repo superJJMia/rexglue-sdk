@@ -111,7 +111,7 @@ class DxbcShaderTranslator : public ShaderTranslator {
     // If anything in this is structure is changed in a way not compatible with
     // the previous layout, invalidate the pipeline storages by increasing this
     // version number (0xYYYYMMDD)!
-    static constexpr uint32_t kVersion = 0x20260226;
+    static constexpr uint32_t kVersion = 0x20260703;
 
     enum class DepthStencilMode : uint32_t {
       kNoModifiers,
@@ -385,8 +385,12 @@ class DxbcShaderTranslator : public ShaderTranslator {
     // (1 * src + 0 * dst), blending is disabled for the render target.
     uint32_t edram_rt_blend_factors_ops[4];
 
-    // The constant blend factor for the respective modes.
-    float edram_blend_constant[4];
+      // The constant blend factor for the respective modes.
+      float edram_blend_constant[4];
+
+      // Integer num_format scale bits on fixed textures. 5 bits per
+      // component (packed into dword per 4 textures for up to 32 textures).
+      uint32_t texture_integer_scale_bits[32];
 
    private:
     friend class DxbcShaderTranslator;
@@ -439,6 +443,8 @@ class DxbcShaderTranslator : public ShaderTranslator {
       kEdramRTBlendFactorsOps,
 
       kEdramBlendConstant,
+
+      kTextureIntegerScaleBits,
 
       kCount,
     };

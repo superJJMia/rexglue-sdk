@@ -33,7 +33,7 @@ class SpirvShaderTranslator : public ShaderTranslator {
     // TODO(Triang3l): Change to 0xYYYYMMDD once it's out of the rapid
     // prototyping stage (easier to do small granular updates with an
     // incremental counter).
-    static constexpr uint32_t kVersion = 12;
+    static constexpr uint32_t kVersion = 13;
 
     enum class DepthStencilMode : uint32_t {
       kNoModifiers,
@@ -299,8 +299,12 @@ class SpirvShaderTranslator : public ShaderTranslator {
     // Low color, low alpha, high color, high alpha.
     float edram_rt_clamp[4][4];
 
-    // The constant blend factor for the respective modes.
-    float edram_blend_constant[4];
+      // The constant blend factor for the respective modes.
+      float edram_blend_constant[4];
+
+      // Integer num_format scale bits on fixed textures (32 dwords).
+      uint32_t texture_integer_scale_bits[32];
+
 
     // Tessellation helper shader constants.
     uint32_t vertex_index_min;
@@ -878,7 +882,8 @@ class SpirvShaderTranslator : public ShaderTranslator {
     // alignment.
     kSystemConstantEdramRTKeepMask,
     kSystemConstantEdramRTClamp,
-    kSystemConstantEdramBlendConstant,
+      kSystemConstantEdramBlendConstant,
+      kSystemConstantTextureIntegerScaleBits,
   };
   spv::Id uniform_system_constants_;
   spv::Id uniform_float_constants_;

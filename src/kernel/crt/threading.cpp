@@ -60,6 +60,8 @@ void UpdateGuestStackPointers(X_KTHREAD* kthread, X_KPCR* pcr, PPCContext* ctx, 
   pcr->stack_base_ptr = stack_base;
   pcr->stack_end_ptr = stack_limit;
   ctx->r1.u64 = sp;
+  REXSYS_INFO("[PAR-fiber] UpdateStack sp=0x{:08X} base=0x{:08X} limit=0x{:08X} alloc=0x{:08X}", sp,
+              stack_base, stack_limit, stack_alloc_base);
 }
 
 //-----------------------------------------------------------------------------
@@ -155,6 +157,12 @@ u32 ConvertThreadToFiber_entry(mapped_void lpParameter) {
 
   kthread->fiber_ptr = buf_addr;
 
+  REXSYS_INFO(
+      "[PAR-fiber] ConvertThreadToFiber fiber=0x{:08X} sp_save=0x{:08X} "
+      "stack=[0x{:08X},0x{:08X}]",
+      buf_addr, static_cast<uint32_t>(ctx->r1.u64), static_cast<uint32_t>(kthread->stack_limit),
+      static_cast<uint32_t>(kthread->stack_base));
+
   // Reuse existing host fiber from XThread::Execute() if available;
   // otherwise create one (should not happen in normal flow).
   auto* host_fiber = thread->main_fiber();
@@ -232,6 +240,11 @@ u32 CreateFiber_entry(u32 dwStackSize, u32 lpStartAddress, mapped_void lpParamet
   fiber->stack_limit = stack_bottom;
   fiber->sp_save = initial_sp;
 
+  REXSYS_INFO(
+      "[PAR-fiber] CreateFiber fiber=0x{:08X} start=0x{:08X} stack_addr=0x{:08X} "
+      "size=0x{:08X} top=0x{:08X} initial_sp=0x{:08X}",
+      buf_addr, lpStartAddress, stack_address, guest_stack_size, stack_top, initial_sp);
+
   // Create host fiber
   size_t host_stack =
       std::max(static_cast<size_t>(guest_stack_size), static_cast<size_t>(256u * 1024u));
@@ -274,6 +287,8 @@ void DeleteFiber_entry(mapped_void lpFiber) {
   auto* info = ks->LookupFiber(fiber_addr);
   if (info) {
     if (!info->is_thread_fiber && info->guest_stack_bottom) {
+      REXSYS_INFO("[PAR-fiber] DeleteFiber fiber=0x{:08X} RELEASE guest_stack_bottom=0x{:08X}",
+                  fiber_addr, info->guest_stack_bottom);
       mem->LookupHeap(0x70000000)->Release(info->guest_stack_bottom);
     }
     if (info->host_fiber) {
@@ -311,6 +326,12 @@ void SwitchToFiber_entry(mapped_void lpFiber) {
 
   // Restore target's non-volatile registers and guest stack state
   auto* target_fiber = mem->TranslateVirtual<X_FIBER_CONTEXT*>(target_addr);
+  REXSYS_INFO(
+      "[PAR-fiber] SwitchToFiber target=0x{:08X} current=0x{:08X} sp_save=0x{:08X} "
+      "stack=[0x{:08X},0x{:08X}]",
+      target_addr, current_addr, static_cast<uint32_t>(target_fiber->sp_save),
+      static_cast<uint32_t>(target_fiber->stack_limit),
+      static_cast<uint32_t>(target_fiber->stack_base));
   ctx->RestoreNonVolatiles(target_fiber->register_save_area);
   UpdateGuestStackPointers(kthread, pcr, ctx, static_cast<uint32_t>(target_fiber->sp_save),
                            static_cast<uint32_t>(target_fiber->stack_alloc_base),

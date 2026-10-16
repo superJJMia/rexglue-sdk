@@ -1951,7 +1951,8 @@ void DxbcShaderTranslator::ProcessTextureFetchInstruction(
     PopSystemTemp();
   }
 
-  if (instr.opcode == FetchOpcode::kTextureFetch) {
+  
+if (instr.opcode == FetchOpcode::kTextureFetch) {
     // Apply the result exponent bias.
     uint32_t exp_adjust_temp = PushSystemTemp();
     a_.OpIBFE(dxbc::Dest::R(exp_adjust_temp, 0b0001), dxbc::Src::LU(6), dxbc::Src::LU(13),

@@ -37,6 +37,7 @@
 #include <rex/system/xtimer.h>
 #include <rex/system/xtypes.h>
 #include <rex/thread/atomic.h>
+#include <rex/thread/fiber.h>
 #include <rex/thread/mutex.h>
 
 namespace rex::kernel::xboxkrnl {
@@ -254,6 +255,34 @@ u32 NtSuspendThread_entry(u32 handle, mapped_u32 suspend_count_ptr) {
 
 namespace {
 
+struct FiberArgs {
+  PPCFunc* start_fn;
+  uint32_t fiber_data;
+};
+
+static void FiberEntryPoint(void* raw_arg) {
+  auto args = std::unique_ptr<FiberArgs>(static_cast<FiberArgs*>(raw_arg));
+  auto* current_thread = XThread::GetCurrentThread();
+  if (!current_thread) {
+    std::terminate();
+  }
+  PPCContext& ctx = *current_thread->thread_state()->context();
+  auto* mem = current_thread->kernel_state()->memory();
+
+  // Seed r3 with the fiber parameter (lpParameter) from the guest context.
+  ctx.r3.u64 = args->fiber_data;
+
+  args->start_fn(ctx, mem->virtual_membase());
+
+  // Fiber returned without switching away - fall back to the main context.
+  if (current_thread->main_fiber()) {
+    PROFILE_FIBER_LEAVE;
+    rex::thread::Fiber::SwitchTo(current_thread->main_fiber());
+  }
+  REXKRNL_WARN("FiberEntryPoint: returned with no fiber to switch back to - terminating");
+  std::terminate();
+}
+
 void UpdateGuestStackPointers(X_KTHREAD* kthread, X_KPCR* pcr, PPCContext* ctx, uint32_t sp,
                               uint32_t stack_alloc_base, uint32_t stack_base,
                               uint32_t stack_limit) {
@@ -263,6 +292,8 @@ void UpdateGuestStackPointers(X_KTHREAD* kthread, X_KPCR* pcr, PPCContext* ctx, 
   pcr->stack_base_ptr = stack_base;
   pcr->stack_end_ptr = stack_limit;
   ctx->r1.u64 = sp;
+  REXKRNL_TRACE("[PAR-sp] UpdateStack sp=0x{:08X} base=0x{:08X} limit=0x{:08X} alloc=0x{:08X}", sp,
+                stack_base, stack_limit, stack_alloc_base);
 }
 
 }  // namespace
@@ -275,8 +306,86 @@ void KeSetCurrentStackPointers_entry(mapped_void stack_ptr, ppc_ptr_t<X_KTHREAD>
   auto pcr =
       REX_KERNEL_MEMORY()->TranslateVirtual<X_KPCR*>(static_cast<uint32_t>(context->r13.u64));
 
-  UpdateGuestStackPointers(thread, pcr, context, stack_ptr.guest_address(),
-                           stack_alloc_base.value(), stack_base.value(), stack_limit.value());
+  thread->stack_alloc_base = stack_alloc_base.value();
+  thread->stack_base = stack_base.value();
+  thread->stack_limit = stack_limit.value();
+  pcr->stack_base_ptr = stack_base.guest_address();
+  pcr->stack_end_ptr = stack_limit.guest_address();
+  context->r1.u64 = stack_ptr.guest_address();
+
+  // The guest implements its own cooperative fibers on top of this kernel call:
+  // it saves/restores the full PPC context itself and only asks us to swap the
+  // stack. Mirror that swap on the HOST call stack so mid-function resume works.
+  if (thread->fiber_ptr && current_thread->guest_object() == thread.guest_address()) {
+    auto* ks = current_thread->kernel_state();
+    uint32_t target_guest_addr = static_cast<uint32_t>(thread->fiber_ptr);
+
+    auto* target_info = ks->LookupFiber(target_guest_addr);
+    bool is_target_registered = target_info != nullptr;
+
+    // A newly created fiber has a saved LR pointing at a real function entry; a
+    // switch back to an existing fiber has an LR somewhere mid-function.
+    auto* target_fiber =
+        REX_KERNEL_MEMORY()->TranslateVirtual<X_FIBER_CONTEXT*>(target_guest_addr);
+    uint32_t saved_lr = target_fiber ? static_cast<uint32_t>(target_fiber->lr_save) : 0;
+    PPCFunc* start_fn =
+        (saved_lr && target_fiber) ? ks->function_dispatcher()->GetFunction(saved_lr) : nullptr;
+
+    rex::thread::Fiber* target = is_target_registered ? target_info->host_fiber : nullptr;
+
+    if (start_fn) {
+      if (is_target_registered) {
+        if (target) {
+          target->Destroy();
+        }
+        ks->UnregisterFiber(target_guest_addr);
+        is_target_registered = false;
+        target = nullptr;
+      }
+
+      size_t host_stack = std::max(static_cast<size_t>(stack_base.value() - stack_limit.value()),
+                                   static_cast<size_t>(256u * 1024u));
+      auto args_owner = std::make_unique<FiberArgs>(FiberArgs{
+          start_fn,
+          static_cast<uint32_t>(target_fiber->fiber_data),
+      });
+      target = rex::thread::Fiber::Create(host_stack, FiberEntryPoint, args_owner.get());
+      if (target) {
+        args_owner.release();  // FiberEntryPoint takes ownership via unique_ptr
+      }
+      REXSYS_INFO(
+          "[PAR-fiber] KeSetCurrentStackPointers: created host fiber {:p} for guest ctx 0x{:08X} "
+          "start_fn 0x{:08X}",
+          static_cast<void*>(target), target_guest_addr, saved_lr);
+    } else if (!target) {
+      target = current_thread->main_fiber();
+      REXSYS_INFO(
+          "[PAR-fiber] KeSetCurrentStackPointers: resuming main fiber {:p} for guest ctx 0x{:08X}",
+          static_cast<void*>(target), target_guest_addr);
+    }
+
+    if (!target) {
+      REXKRNL_WARN("KeSetCurrentStackPointers: no valid fiber for guest ctx {:#010x}, skipping",
+                   target_guest_addr);
+      return;
+    }
+    if (!is_target_registered) {
+      // The guest owns and manages its own fiber stacks; register with a null
+      // stack bottom so our cleanup never releases a stack we did not allocate.
+      ks->RegisterFiber(target_guest_addr, FiberInfo{target, target_guest_addr, target_guest_addr,
+                                                      stack_base.value(), 0u, false});
+    }
+
+    if (target == current_thread->main_fiber()) {
+      PROFILE_FIBER_LEAVE;
+    } else {
+      PROFILE_FIBER_ENTER(
+          ks->GetOrCreateFiberName(target_guest_addr, current_thread->name().c_str()));
+    }
+
+    rex::thread::Fiber::SwitchTo(target);
+    // Execution resumes here when another fiber switches back to this one.
+  }
 }
 
 u32 KeSetAffinityThread_entry(mapped_void thread_ptr, u32 affinity,

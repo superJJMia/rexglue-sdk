@@ -13,6 +13,9 @@
  *              role as a function dispatch table rather than a CPU emulator.
  */
 
+#include <cstdio>
+#include <cstdlib>
+
 #include <rex/assert.h>
 #include <rex/dbg.h>
 #include <rex/logging.h>
@@ -35,8 +38,23 @@ FunctionDispatcher* GetBoundFunctionDispatcher() {
 }  // namespace
 
 static void InvalidFunctionTrap(PPCContext& ctx, uint8_t* /*base*/) {
-  REX_FATAL("Call to invalid or unregistered function at guest address 0x{:08X}",
-            ctx.last_indirect_target);
+  const uint32_t addr = ctx.last_indirect_target;
+  // Diagnostic collection mode: set REX_COLLECT_MISSING=1 to record every
+  // unknown indirect target to missing_functions.txt and resume as a stub
+  // returning 0, instead of aborting at the first one. This lets a single run
+  // reveal every function still missing from the recompilation, which are then
+  // declared in overrides.toml and regenerated.
+  const char* collect = std::getenv("REX_COLLECT_MISSING");
+  if (collect && collect[0] == '1') {
+    REXLOG_ERROR("Missing function (stubbed, returning 0): 0x{:08X}", addr);
+    if (FILE* f = std::fopen("missing_functions.txt", "a")) {
+      std::fprintf(f, "0x%08X\n", addr);
+      std::fclose(f);
+    }
+    ctx.r3.u64 = 0;
+    return;
+  }
+  REX_FATAL("Call to invalid or unregistered function at guest address 0x{:08X}", addr);
 }
 
 PPCFunc* ResolveIndirectFunction(uint32_t guest_address) {

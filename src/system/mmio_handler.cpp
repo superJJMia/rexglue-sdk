@@ -10,6 +10,7 @@
  */
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <utility>
 
@@ -20,6 +21,10 @@
 #include <rex/platform.h>
 #include <rex/system/mmio_handler.h>
 #include <rex/types.h>
+
+#if REX_PLATFORM_WIN32
+#include <windows.h>
+#endif
 
 using namespace rex::arch;
 
@@ -417,6 +422,26 @@ bool MMIOHandler::ExceptionCallback(arch::Exception* ex) {
     // The address is not found within any range, so either a write watch or an
     // actual access violation.
     if (access_violation_callback_) {
+      // PARCHE LOCAL: traza nativa del AV (rip + marcos de pila del host).
+      // Gateada por entorno para no inundar el log (el hilo de render puede
+      // generar miles de AV/s). Definir REX_PAR_AVLOG=1 para activarla.
+      {
+        static const bool av_log =
+            (std::getenv("REX_PAR_AVLOG") != nullptr) &&
+            (std::getenv("REX_PAR_AVLOG")[0] == '1');
+        if (av_log) {
+          void* marcos[32] = {};
+          USHORT n = RtlCaptureStackBackTrace(0, 32, marcos, nullptr);
+          uint64_t base_proto2 = reinterpret_cast<uint64_t>(GetModuleHandleA(nullptr));
+          uint64_t pc = reinterpret_cast<uint64_t>(ex->pc());
+          REXSYS_ERROR("[PAR] AV nativo pc=0x{:016X} rva=0x{:X} base=0x{:016X} guest=0x{:08X} write={}",
+                       pc, pc - base_proto2, base_proto2, fault_guest_virtual_address, is_write);
+          for (USHORT k = 0; k < n; ++k) {
+            uint64_t mk = reinterpret_cast<uint64_t>(marcos[k]);
+            REXSYS_ERROR("[PAR]   marco[{}]=0x{:016X} rva=0x{:X}", k, mk, mk - base_proto2);
+          }
+        }
+      }
       return access_violation_callback_(std::move(lock), access_violation_callback_context_,
                                         fault_host_address, is_write);
     }
