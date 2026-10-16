@@ -2068,19 +2068,22 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
     result_vector = result[result_component_index];
   }
 
-  // Diagnostic probe: force the texture fetch result to flat gray. If striped
-  // artifacts disappear, the color is coming from texture sampling.
+  // Diagnostic probe: force the texture fetch result to cyan to be clearly
+  // visible vs gray/white world.
   if (REXCVAR_GET(ps_texture_probe) && is_pixel_shader()) {
-    spv::Id probe_gray = builder_->makeFloatConstant(0.5f);
-    if (used_result_component_count > 1) {
-      id_vector_temp_.clear();
-      for (uint32_t i = 0; i < used_result_component_count; ++i) {
-        id_vector_temp_.push_back(probe_gray);
-      }
+    spv::Id c0 = builder_->makeFloatConstant(0.0f);
+    spv::Id c1 = builder_->makeFloatConstant(1.0f);
+    if (used_result_component_count >= 4) {
       result_vector = builder_->createCompositeConstruct(
-          type_float_vectors_[used_result_component_count - 1], id_vector_temp_);
+          type_float4_, std::vector<spv::Id>{c0, c1, c1, c1});
+    } else if (used_result_component_count == 3) {
+      result_vector = builder_->createCompositeConstruct(
+          type_float3_, std::vector<spv::Id>{c0, c1, c1});
+    } else if (used_result_component_count == 2) {
+      result_vector = builder_->createCompositeConstruct(
+          type_float2_, std::vector<spv::Id>{c0, c1});
     } else {
-      result_vector = probe_gray;
+      result_vector = c1;
     }
   }
 
