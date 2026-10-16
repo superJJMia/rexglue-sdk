@@ -16,6 +16,7 @@
 #include <SPIRV/GLSL.std.450.h>
 
 #include <rex/assert.h>
+#include <rex/graphics/flags.h>
 #include <rex/graphics/pipeline/render_target/cache.h>
 #include <rex/graphics/pipeline/shader/spirv_translator.h>
 #include <rex/graphics/util/draw.h>
@@ -921,6 +922,15 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
       color_targets_remaining &= ~(UINT32_C(1) << color_target_index);
       spv::Id color_variable = output_or_var_fragment_data_[color_target_index];
       spv::Id color = builder_->createLoad(color_variable, spv::NoPrecision);
+
+      // Diagnostic color probe: force the color written to all render targets to
+      // magenta so the pixel shader output / render target write path can be
+      // isolated visually.
+      if (REXCVAR_GET(ps_color_probe)) {
+        color = builder_->createCompositeConstruct(
+            type_float4_,
+            std::vector<spv::Id>{const_float_1_, const_float_0_, const_float_1_, const_float_1_});
+      }
 
       // Apply the exponent bias after the alpha test and alpha to coverage
       // because they need the unbiased alpha from the shader.

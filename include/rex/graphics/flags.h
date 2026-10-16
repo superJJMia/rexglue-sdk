@@ -65,6 +65,7 @@ REXCVAR_DECLARE(int32_t, primitive_processor_cache_min_indices);
 
 // GPU Debug
 REXCVAR_DECLARE(bool, gpu_debug_markers);
+REXCVAR_DECLARE(bool, ps_color_probe);
 bool IsGpuDebugMarkersEnabled();
 
 // GPU Alpha Test

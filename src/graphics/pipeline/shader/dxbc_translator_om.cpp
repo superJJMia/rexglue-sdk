@@ -2748,6 +2748,18 @@ void DxbcShaderTranslator::CompletePixelShader() {
     }
   }
 
+  // Diagnostic color probe: force all written render targets to magenta so the
+  // pixel shader output / render target write path can be isolated visually.
+  if (REXCVAR_GET(ps_color_probe)) {
+    uint32_t shader_writes_color_targets = current_shader().writes_color_targets();
+    for (uint32_t i = 0; i < 4; ++i) {
+      if (shader_writes_color_targets & (uint32_t(1) << i)) {
+        a_.OpMov(dxbc::Dest::R(system_temps_color_[i]),
+                 dxbc::Src::LF(1.0f, 0.0f, 1.0f, 1.0f));
+      }
+    }
+  }
+
   // Write the values to the render targets. Not applying the exponent bias yet
   // because the original 0 to 1 alpha value is needed for alpha to coverage,
   // which is done differently for ROV and RTV/DSV.

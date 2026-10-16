@@ -32,6 +32,8 @@ REXCVAR_DEFINE_BOOL(gpu_debug_markers, false, "GPU",
                     "Insert debug markers into GPU command streams for tools "
                     "like PIX and RenderDoc. Automatically enabled when "
                     "RenderDoc is detected.");
+REXCVAR_DEFINE_BOOL(ps_color_probe, false, "GPU",
+                    "Diagnostic: force pixel shader color output to magenta");
 
 bool IsGpuDebugMarkersEnabled() {
   static bool cached = false;
