@@ -38,11 +38,13 @@ endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/rexglueTargets.cmake")
 
-# Only Release rexglue is installed, so every consumer config has to reach it.
+# The codegen tool is installed for Release and RelWithDebInfo. Consumers in
+# any other configuration reach it through the Release one. (RelWithDebInfo
+# used to be mapped here too, which broke consumers built in RelWithDebInfo
+# when only that configuration was installed.)
 if(TARGET rex::rexglue)
     set_target_properties(rex::rexglue PROPERTIES
         MAP_IMPORTED_CONFIG_DEBUG Release
-        MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
         MAP_IMPORTED_CONFIG_MINSIZEREL Release)
 endif()
 
