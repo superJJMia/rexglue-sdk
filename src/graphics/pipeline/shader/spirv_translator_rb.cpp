@@ -931,6 +931,15 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
             type_float4_,
             std::vector<spv::Id>{const_float_1_, const_float_0_, const_float_1_, const_float_1_});
       }
+      // Diagnostic probe: replace NaN components of the color with 0. If the
+      // frame stops being washed out to white (Vulkan) / black (D3D12), the
+      // shader's inputs are producing NaN.
+      if (REXCVAR_GET(ps_flush_nan_probe)) {
+        spv::Id color_is_nan = builder_->createBinOp(spv::OpFUnordNotEqual, type_bool4_,
+                                                     color, color);
+        color = builder_->createTriOp(spv::OpSelect, type_float4_, color_is_nan,
+                                      const_float_vectors_0_[3], color);
+      }
 
       // Apply the exponent bias after the alpha test and alpha to coverage
       // because they need the unbiased alpha from the shader.

@@ -34,6 +34,8 @@ REXCVAR_DEFINE_BOOL(gpu_debug_markers, false, "GPU",
                     "RenderDoc is detected.");
 REXCVAR_DEFINE_BOOL(ps_color_probe, false, "GPU",
                     "Diagnostic: force pixel shader color output to magenta");
+REXCVAR_DEFINE_BOOL(ps_flush_nan_probe, false, "GPU",
+                    "Diagnostic: replace NaN in pixel shader color output with 0");
 
 bool IsGpuDebugMarkersEnabled() {
   static bool cached = false;
