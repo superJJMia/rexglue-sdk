@@ -66,3 +66,6 @@ REXCVAR_DEFINE_BOOL(ps_exposure_boost, false, "GPU",
 REXCVAR_DEFINE_BOOL(ps_skip_exp_bias, false, "GPU",
     "Diagnostic: skip applying the color exponent bias (use 1.0).");
 
+REXCVAR_DEFINE_BOOL(ps_gamma_probe, false, "GPU",
+    "Diagnostic: apply pow(color, 1/2.2) to test for missing gamma.");
+

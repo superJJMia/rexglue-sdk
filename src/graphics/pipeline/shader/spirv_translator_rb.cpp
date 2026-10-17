@@ -944,6 +944,16 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
         spv::Id factor = builder_->makeFloatConstant(2.0f);
         color = builder_->createNoContractionBinOp(spv::OpFMul, type_float4_, color, factor);
       }
+      if (REXCVAR_GET(ps_gamma_probe)) {
+        color = builder_->createBinBuiltinCall(type_float4_, ext_inst_glsl_std_450_,
+                                               GLSLstd450FMax, color, const_float_vectors_0_[3]);
+        spv::Id gamma_inv = builder_->makeFloatConstant(1.0f / 2.2f);
+        spv::Id gamma_vec = builder_->createCompositeConstruct(
+            type_float4_,
+            std::vector<spv::Id>{gamma_inv, gamma_inv, gamma_inv, gamma_inv});
+        color = builder_->createBinBuiltinCall(type_float4_, ext_inst_glsl_std_450_,
+                                               GLSLstd450Pow, color, gamma_vec);
+      }
 
       // Apply the exponent bias after the alpha test and alpha to coverage
       // because they need the unbiased alpha from the shader.
