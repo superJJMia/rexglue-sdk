@@ -673,19 +673,6 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
     // instruction (plus-minus 0.5 offsets are very common in games). But
     // offsetting at mip levels is a rare usage case, mostly offsets are used
     // for things like shadow maps and blur, where there are no mips.
-    if (REXCVAR_GET(ps_uv_probe) && is_pixel_shader()) {
-      if (instr.dimension == xenos::FetchOpDimension::k1D) {
-        coordinates[0] = const_float_0_5_;
-      } else if (instr.dimension == xenos::FetchOpDimension::k2D ||
-                 instr.dimension == xenos::FetchOpDimension::k3DOrStacked ||
-                 instr.dimension == xenos::FetchOpDimension::kCube) {
-        coordinates[0] = const_float_0_5_;
-        coordinates[1] = const_float_0_5_;
-        if (instr.dimension == xenos::FetchOpDimension::k3DOrStacked) {
-          coordinates[2] = const_float_0_5_;
-        }
-      }
-    }
     float offset_values[3] = {};
     // MSDN doesn't list offsets as getCompTexLOD parameters.
     if (instr.opcode != ucode::FetchOpcode::kGetTextureComputedLod) {
@@ -986,6 +973,16 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
       uint32_t coordinate_component_index;
       rex::bit_scan_forward(coordinates_needed_components, &coordinate_component_index);
       coordinates[coordinate_component_index] = coordinates_operand;
+    }
+    // Diagnostic probe: force texture fetch coordinates to (0.5, 0.5) so the
+    // sampled texel is constant across the surface. If the world stops varying
+    // (or becomes uniformly colored) when enabled, tiling/UV/coordinate issues
+    // can be ruled in or out.
+    if (REXCVAR_GET(ps_uv_probe) && is_pixel_shader()) {
+      spv::Id half = builder_->makeFloatConstant(0.5f);
+      coordinates[0] = half;
+      coordinates[1] = half;
+      coordinates[2] = half;
     }
     spv::Id texture_resolution_scaled = spv::NoResult;
     uint32_t revert_resolution_scale_axes =
