@@ -950,12 +950,15 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
       id_vector_temp_.clear();
       id_vector_temp_.push_back(builder_->makeIntConstant(kSystemConstantColorExpBias));
       id_vector_temp_.push_back(builder_->makeIntConstant(int32_t(color_target_index)));
-      color = builder_->createNoContractionBinOp(
-          spv::OpVectorTimesScalar, type_float4_, color,
-          builder_->createLoad(
-              builder_->createAccessChain(spv::StorageClassUniform, uniform_system_constants_,
-                                          id_vector_temp_),
-              spv::NoPrecision));
+      spv::Id color_exp_bias = builder_->createLoad(
+          builder_->createAccessChain(spv::StorageClassUniform, uniform_system_constants_,
+                                      id_vector_temp_),
+          spv::NoPrecision);
+      if (REXCVAR_GET(ps_skip_exp_bias)) {
+        color_exp_bias = const_float_1_;
+      }
+      color = builder_->createNoContractionBinOp(spv::OpVectorTimesScalar, type_float4_, color,
+                                                 color_exp_bias);
 
       if (edram_fragment_shader_interlock_) {
         // Write the color to the target in the EDRAM only it was written on the

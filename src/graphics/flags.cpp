@@ -63,3 +63,6 @@ REXCVAR_DEFINE_BOOL(ps_uv_probe, false, "GPU",
 REXCVAR_DEFINE_BOOL(ps_exposure_boost, false, "GPU",
     "Multiply final pixel color to see hidden colors.");
 
+REXCVAR_DEFINE_BOOL(ps_skip_exp_bias, false, "GPU",
+    "Diagnostic: skip applying the color exponent bias (use 1.0).");
+
