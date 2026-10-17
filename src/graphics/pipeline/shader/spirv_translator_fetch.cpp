@@ -2066,6 +2066,54 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
           }
         }
 
+        // Restore the guest integer range of fixed-point texels - the host
+        // keeps such textures normalized, so without this the guest shader
+        // receives values in a completely different range. Mirrors the
+        // canary's num_format handling, reading the packing produced by
+        // TextureCache::GetIntegerScaleBits: 5 bits per component, bits 0:3 =
+        // component_bits - 1, bit 4 = signed, zero meaning no conversion (a
+        // zero field yields a scale of 2^1 - 1 = 1, so it is a no-op).
+        {
+          id_vector_temp_.clear();
+          id_vector_temp_.push_back(
+              builder_->makeIntConstant(kSystemConstantTextureIntegerScaleBits));
+          id_vector_temp_.push_back(
+              builder_->makeIntConstant(int32_t(fetch_constant_index >> 2)));
+          id_vector_temp_.push_back(
+              builder_->makeIntConstant(int32_t(fetch_constant_index & 3)));
+          spv::Id integer_scale_bits_packed = builder_->createLoad(
+              builder_->createAccessChain(spv::StorageClassUniform, uniform_system_constants_,
+                                          id_vector_temp_),
+              spv::NoPrecision);
+          uint32_t result_remaining_components = used_result_nonzero_components;
+          uint32_t result_component_index;
+          while (rex::bit_scan_forward(result_remaining_components, &result_component_index)) {
+            result_remaining_components &= ~(UINT32_C(1) << result_component_index);
+            spv::Id component_scale_bits =
+                builder_->createTriOp(spv::OpBitFieldUExtract, type_uint_, integer_scale_bits_packed,
+                                      builder_->makeUintConstant(5 * result_component_index),
+                                      builder_->makeUintConstant(5));
+            // 2^w - 1 for unsigned components, 2^(w - 1) - 1 for signed ones.
+            spv::Id component_scale_shift = builder_->createBinOp(
+                spv::OpIAdd, type_uint_,
+                builder_->createBinOp(spv::OpBitwiseAnd, type_uint_, component_scale_bits,
+                                      builder_->makeUintConstant(0xF)),
+                builder_->makeUintConstant(1));
+            component_scale_shift = builder_->createBinOp(
+                spv::OpISub, type_uint_, component_scale_shift,
+                builder_->createBinOp(spv::OpShiftRightLogical, type_uint_, component_scale_bits,
+                                      builder_->makeUintConstant(4)));
+            spv::Id component_scale = builder_->createUnaryOp(
+                spv::OpConvertUToF, type_float_,
+                builder_->createBinOp(
+                    spv::OpISub, type_uint_,
+                    builder_->createBinOp(spv::OpShiftLeftLogical, type_uint_,
+                                          builder_->makeUintConstant(1), component_scale_shift),
+                    builder_->makeUintConstant(1)));
+            result[result_component_index] = builder_->createNoContractionBinOp(
+                spv::OpFMul, type_float_, result[result_component_index], component_scale);
+          }
+        }
 
         // Apply the exponent bias from the bits 13:18 of the fetch constant
         // word 3.
@@ -2122,8 +2170,9 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
     }
   }
 
-  // Diagnostic probe: capture the FIRST sampled texture color (raw albedo), so
-  // the final output can show it bypassing all shading.
+  // Diagnostic probe: capture the sampled texture color with the greatest
+  // luminance (most likely the albedo / color texture), so the final output can
+  // show it bypassing all shading.
   if (REXCVAR_GET(ps_albedo_probe) && is_pixel_shader()) {
     spv::Id albedo_components[4];
     for (uint32_t albedo_component_index = 0; albedo_component_index < 4;
@@ -2139,16 +2188,21 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
     id_vector_temp_.push_back(albedo_components[2]);
     id_vector_temp_.push_back(albedo_components[3]);
     spv::Id fetched_color = builder_->createCompositeConstruct(type_float4_, id_vector_temp_);
-    spv::Id already_set = builder_->createLoad(var_probe_albedo_set_, spv::NoPrecision);
-    spv::Id not_set = builder_->createBinOp(spv::OpIEqual, type_bool_, already_set, const_uint_0_);
+    spv::Id fetched_luma = builder_->createBinOp(
+        spv::OpFAdd, type_float_,
+        builder_->createBinOp(spv::OpFAdd, type_float_, albedo_components[0],
+                              albedo_components[1]),
+        albedo_components[2]);
+    spv::Id best_luma = builder_->createLoad(var_probe_luma_, spv::NoPrecision);
+    spv::Id brighter =
+        builder_->createBinOp(spv::OpFOrdGreaterThan, type_bool_, fetched_luma, best_luma);
     spv::Id current_color = builder_->createLoad(var_probe_albedo_, spv::NoPrecision);
     builder_->createStore(
-        builder_->createTriOp(spv::OpSelect, type_float4_, not_set, fetched_color, current_color),
+        builder_->createTriOp(spv::OpSelect, type_float4_, brighter, fetched_color, current_color),
         var_probe_albedo_);
     builder_->createStore(
-        builder_->createTriOp(spv::OpSelect, type_uint_, not_set, builder_->makeUintConstant(1),
-                              already_set),
-        var_probe_albedo_set_);
+        builder_->createTriOp(spv::OpSelect, type_float_, brighter, fetched_luma, best_luma),
+        var_probe_luma_);
   }
 
   StoreResult(instr.result, result_vector);
