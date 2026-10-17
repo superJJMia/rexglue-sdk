@@ -33,7 +33,7 @@ class SpirvShaderTranslator : public ShaderTranslator {
     // TODO(Triang3l): Change to 0xYYYYMMDD once it's out of the rapid
     // prototyping stage (easier to do small granular updates with an
     // incremental counter).
-    static constexpr uint32_t kVersion = 21;
+    static constexpr uint32_t kVersion = 24;
 
     enum class DepthStencilMode : uint32_t {
       kNoModifiers,
@@ -1056,6 +1056,10 @@ class SpirvShaderTranslator : public ShaderTranslator {
   // main_loop_merge_.
   spv::Block* main_loop_exit_;
   spv::Id main_loop_pc_next_;
+  // Diagnostic: storage for the last sampled texture color (albedo probe).
+  spv::Id var_probe_albedo_;
+  // Diagnostic: whether the first sampled texture color has been captured.
+  spv::Id var_probe_albedo_set_;
   spv::Block* main_switch_header_;
   std::unique_ptr<spv::Instruction> main_switch_op_;
   spv::Block* main_switch_merge_;

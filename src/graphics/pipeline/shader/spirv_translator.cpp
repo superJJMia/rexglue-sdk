@@ -21,6 +21,7 @@
 #include <fmt/format.h>
 
 #include <rex/assert.h>
+#include <rex/graphics/flags.h>
 #include <rex/graphics/pipeline/shader/spirv.h>
 #include <rex/graphics/pipeline/shader/spirv_translator.h>
 #include <rex/math.h>
@@ -459,6 +460,14 @@ void SpirvShaderTranslator::StartTranslation() {
     if (features_.spirv_version >= spv::Spv_1_4) {
       main_interface_.push_back(buffers_shared_memory_);
     }
+  }
+
+  if (REXCVAR_GET(ps_albedo_probe) || REXCVAR_GET(ps_uv_color_probe)) {
+    var_probe_albedo_ = builder_->createVariable(spv::NoPrecision, spv::StorageClassPrivate,
+                                                 type_float4_, "xe_probe_albedo", const_float4_0_);
+    var_probe_albedo_set_ = builder_->createVariable(spv::NoPrecision, spv::StorageClassPrivate,
+                                                     type_uint_, "xe_probe_albedo_set",
+                                                     const_uint_0_);
   }
 
   if (is_vertex_shader()) {

@@ -69,3 +69,10 @@ REXCVAR_DEFINE_BOOL(ps_skip_exp_bias, false, "GPU",
 REXCVAR_DEFINE_BOOL(ps_gamma_probe, false, "GPU",
     "Diagnostic: apply pow(color, 1/2.2) to test for missing gamma.");
 
+REXCVAR_DEFINE_BOOL(ps_albedo_probe, false, "GPU",
+    "Diagnostic: output the last sampled texture color (raw albedo) directly.");
+
+REXCVAR_DEFINE_BOOL(ps_uv_color_probe, false, "GPU",
+    "Diagnostic: output texture fetch coordinates as color (u, v, 0, 1).");
+
+

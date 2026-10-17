@@ -923,6 +923,13 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
       spv::Id color_variable = output_or_var_fragment_data_[color_target_index];
       spv::Id color = builder_->createLoad(color_variable, spv::NoPrecision);
 
+      // Diagnostic probe: replace the final color with the raw last sampled
+      // texture color (albedo), or the fetch coordinates as color, bypassing
+      // all shading.
+      if (REXCVAR_GET(ps_albedo_probe) || REXCVAR_GET(ps_uv_color_probe)) {
+        color = builder_->createLoad(var_probe_albedo_, spv::NoPrecision);
+      }
+
       // Diagnostic color probe: force the color written to all render targets to
       // magenta so the pixel shader output / render target write path can be
       // isolated visually.

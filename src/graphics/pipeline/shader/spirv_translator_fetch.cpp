@@ -984,6 +984,18 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
       coordinates[1] = half;
       coordinates[2] = half;
     }
+    // Diagnostic probe: remember the fetch coordinates as color (u, v, 0, 1)
+    // so the final output can show them. A colorful gradient means the color
+    // path preserves channels; a gray gradient means channels are collapsed.
+    if (REXCVAR_GET(ps_uv_color_probe) && is_pixel_shader()) {
+      id_vector_temp_.clear();
+      id_vector_temp_.push_back(coordinates[0]);
+      id_vector_temp_.push_back(coordinates[1]);
+      id_vector_temp_.push_back(const_float_0_);
+      id_vector_temp_.push_back(const_float_1_);
+      builder_->createStore(builder_->createCompositeConstruct(type_float4_, id_vector_temp_),
+                            var_probe_albedo_);
+    }
     spv::Id texture_resolution_scaled = spv::NoResult;
     uint32_t revert_resolution_scale_axes =
         uint32_t(draw_resolution_scale_x_ > 1) | (uint32_t(draw_resolution_scale_y_ > 1) << 1);
@@ -2075,8 +2087,7 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
   }
 
   // Store the needed components of the result.
-  spv::Id result_vector;
-  if (used_result_component_count > 1) {
+  spv::Id result_vector;  if (used_result_component_count > 1) {
     id_vector_temp_.clear();
     uint32_t result_components_remaining = used_result_components;
     uint32_t result_component_index;
@@ -2109,6 +2120,35 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
     } else {
       result_vector = c1;
     }
+  }
+
+  // Diagnostic probe: capture the FIRST sampled texture color (raw albedo), so
+  // the final output can show it bypassing all shading.
+  if (REXCVAR_GET(ps_albedo_probe) && is_pixel_shader()) {
+    spv::Id albedo_components[4];
+    for (uint32_t albedo_component_index = 0; albedo_component_index < 4;
+         ++albedo_component_index) {
+      albedo_components[albedo_component_index] =
+          (used_result_components & (UINT32_C(1) << albedo_component_index))
+              ? result[albedo_component_index]
+              : const_float_0_;
+    }
+    id_vector_temp_.clear();
+    id_vector_temp_.push_back(albedo_components[0]);
+    id_vector_temp_.push_back(albedo_components[1]);
+    id_vector_temp_.push_back(albedo_components[2]);
+    id_vector_temp_.push_back(albedo_components[3]);
+    spv::Id fetched_color = builder_->createCompositeConstruct(type_float4_, id_vector_temp_);
+    spv::Id already_set = builder_->createLoad(var_probe_albedo_set_, spv::NoPrecision);
+    spv::Id not_set = builder_->createBinOp(spv::OpIEqual, type_bool_, already_set, const_uint_0_);
+    spv::Id current_color = builder_->createLoad(var_probe_albedo_, spv::NoPrecision);
+    builder_->createStore(
+        builder_->createTriOp(spv::OpSelect, type_float4_, not_set, fetched_color, current_color),
+        var_probe_albedo_);
+    builder_->createStore(
+        builder_->createTriOp(spv::OpSelect, type_uint_, not_set, builder_->makeUintConstant(1),
+                              already_set),
+        var_probe_albedo_set_);
   }
 
   StoreResult(instr.result, result_vector);

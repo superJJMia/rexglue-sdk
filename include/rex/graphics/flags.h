@@ -116,4 +116,6 @@ REXCVAR_DECLARE(bool, ps_uv_probe);
 REXCVAR_DECLARE(bool, ps_exposure_boost);
 REXCVAR_DECLARE(bool, ps_skip_exp_bias);
 REXCVAR_DECLARE(bool, ps_gamma_probe);
+REXCVAR_DECLARE(bool, ps_albedo_probe);
+REXCVAR_DECLARE(bool, ps_uv_color_probe);
 
