@@ -113,3 +113,5 @@ REXCVAR_DECLARE(bool, d3d12_readback_resolve);
 
 REXCVAR_DECLARE(bool, ps_uv_probe);
 
+REXCVAR_DECLARE(bool, ps_exposure_boost);
+

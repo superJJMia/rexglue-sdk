@@ -940,6 +940,10 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
         color = builder_->createTriOp(spv::OpSelect, type_float4_, color_is_nan,
                                       const_float_vectors_0_[3], color);
       }
+      if (REXCVAR_GET(ps_exposure_boost)) {
+        spv::Id factor = builder_->makeFloatConstant(2.0f);
+        color = builder_->createNoContractionBinOp(spv::OpFMul, type_float4_, color, factor);
+      }
 
       // Apply the exponent bias after the alpha test and alpha to coverage
       // because they need the unbiased alpha from the shader.
