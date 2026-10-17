@@ -110,3 +110,6 @@ REXCVAR_DECLARE(bool, d3d12_readback_resolve);
 #endif  // REX_HAS_D3D12
 
 #define XE_GPU_FINE_GRAINED_DRAW_SCOPES 1
+
+REXCVAR_DECLARE(bool, ps_uv_probe);
+

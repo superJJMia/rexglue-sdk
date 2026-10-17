@@ -673,6 +673,19 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
     // instruction (plus-minus 0.5 offsets are very common in games). But
     // offsetting at mip levels is a rare usage case, mostly offsets are used
     // for things like shadow maps and blur, where there are no mips.
+    if (REXCVAR_GET(ps_uv_probe) && is_pixel_shader()) {
+      if (instr.dimension == xenos::FetchOpDimension::k1D) {
+        coordinates[0] = const_float_0_5_;
+      } else if (instr.dimension == xenos::FetchOpDimension::k2D ||
+                 instr.dimension == xenos::FetchOpDimension::k3DOrStacked ||
+                 instr.dimension == xenos::FetchOpDimension::kCube) {
+        coordinates[0] = const_float_0_5_;
+        coordinates[1] = const_float_0_5_;
+        if (instr.dimension == xenos::FetchOpDimension::k3DOrStacked) {
+          coordinates[2] = const_float_0_5_;
+        }
+      }
+    }
     float offset_values[3] = {};
     // MSDN doesn't list offsets as getCompTexLOD parameters.
     if (instr.opcode != ucode::FetchOpcode::kGetTextureComputedLod) {

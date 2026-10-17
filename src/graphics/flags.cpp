@@ -57,3 +57,6 @@ bool IsGpuDebugMarkersEnabled() {
   }
   return result;
 }
+REXCVAR_DEFINE_BOOL(ps_uv_probe, false, "GPU",
+    "Force texture fetch coordinates to (0.5,0.5) for debugging.");
+
